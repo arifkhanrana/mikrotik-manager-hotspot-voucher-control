@@ -29,6 +29,7 @@ export class App extends DurableObject {
       this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('receipt_header', 'Welcome to NetZone Hotspot! Enjoy fast & reliable internet.')`);
       this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('receipt_footer', 'Support: call +1 555-019-2831. Non-refundable voucher.')`);
       this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('dns_name', 'wifi.netzone.hotspot')`);
+      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('free_trial_enabled', '1')`);
     }
 
     // 2. Routers Table
@@ -141,7 +142,6 @@ export class App extends DurableObject {
       const now = Date.now();
       const batchAlpha = "BATCH-" + Math.floor(now / 1000);
       
-      // Sample Vouchers
       const sampleVouchers = [
         { code: 'NET-8921', pass: '8921', prof: 1, status: 'active', price: 0.50, mac: '', comment: 'Front Desk Counter' },
         { code: 'NET-4410', pass: '4410', prof: 1, status: 'active', price: 0.50, mac: '', comment: 'Batch Print' },
@@ -194,7 +194,6 @@ export class App extends DurableObject {
     const salesCount = this.ctx.storage.sql.exec(`SELECT COUNT(*) as c FROM sales`).one().c as number;
     if (salesCount === 0) {
       const now = Date.now();
-      // Generate some historical sales over past 14 days
       const profileNames = ['1 Hour Fast Pass', '24 Hours Unlimited Day Pass', '7 Days Weekly Special (10GB)', '30 Days VIP Premium Pass'];
       const prices = [0.50, 2.00, 7.50, 25.00];
       const sellers = ['Admin Front Desk', 'Cashier Stand 1', 'Self Portal (QR Pay)', 'Admin Front Desk'];
@@ -246,6 +245,44 @@ export class App extends DurableObject {
         `, l.cat, l.lvl, l.msg, now - (i * 300000 + Math.random() * 100000));
       }
     }
+
+    // 7. Member Accounts Table
+    this.ctx.storage.sql.exec(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        email_phone TEXT DEFAULT '',
+        profile_id INTEGER DEFAULT 2,
+        balance REAL NOT NULL DEFAULT 0.00,
+        used_by_mac TEXT DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active', -- 'active', 'suspended', 'expired'
+        data_used_mb REAL DEFAULT 0,
+        uptime_used INTEGER DEFAULT 0,
+        expires_at INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL
+      )
+    `);
+
+    const accountsCount = this.ctx.storage.sql.exec(`SELECT COUNT(*) as c FROM accounts`).one().c as number;
+    if (accountsCount === 0) {
+      const now = Date.now();
+      this.ctx.storage.sql.exec(`
+        INSERT INTO accounts (username, password, full_name, email_phone, profile_id, balance, used_by_mac, status, data_used_mb, uptime_used, expires_at, created_at)
+        VALUES ('john_doe', 'pass123', 'John Doe', 'john@example.com', 2, 10.00, '04:D4:C4:8A:12:90', 'active', 420.5, 7200, ?, ?)
+      `, now + 86400000 * 14, now - 86400000 * 10);
+
+      this.ctx.storage.sql.exec(`
+        INSERT INTO accounts (username, password, full_name, email_phone, profile_id, balance, used_by_mac, status, data_used_mb, uptime_used, expires_at, created_at)
+        VALUES ('sarah_m', 'sarah2025', 'Sarah Miller', '+1 555-018-9921', 3, 25.00, '7C:10:C9:4F:B2:1A', 'active', 1850.0, 28800, ?, ?)
+      `, now + 86400000 * 25, now - 86400000 * 5);
+
+      this.ctx.storage.sql.exec(`
+        INSERT INTO accounts (username, password, full_name, email_phone, profile_id, balance, used_by_mac, status, data_used_mb, uptime_used, expires_at, created_at)
+        VALUES ('david_tech', 'davidpass', 'David Tech', 'david@company.io', 4, 0.00, '38:F9:D3:91:02:AA', 'active', 12400.0, 172800, ?, ?)
+      `, now + 86400000 * 2, now - 86400000 * 28);
+    }
   }
 
   private setupRoutes() {
@@ -262,6 +299,7 @@ export class App extends DurableObject {
       const activeVouchers = this.ctx.storage.sql.exec(`SELECT COUNT(*) as c FROM vouchers WHERE status='active'`).one().c as number;
       const usedVouchers = this.ctx.storage.sql.exec(`SELECT COUNT(*) as c FROM vouchers WHERE status='used'`).one().c as number;
       const expiredVouchers = this.ctx.storage.sql.exec(`SELECT COUNT(*) as c FROM vouchers WHERE status='expired'`).one().c as number;
+      const totalAccounts = this.ctx.storage.sql.exec(`SELECT COUNT(*) as c FROM accounts`).one().c as number;
 
       // Sales metrics
       const startOfDay = new Date();
@@ -287,6 +325,7 @@ export class App extends DurableObject {
           used: usedVouchers,
           expired: expiredVouchers
         },
+        accounts_count: totalAccounts,
         today_revenue: todaySales.total || 0,
         today_sales_count: todaySales.count || 0,
         total_revenue: totalSalesAllTime.total || 0,
@@ -385,7 +424,6 @@ export class App extends DurableObject {
         return c.json({ success: false, message: "Router not found" }, 404);
       }
 
-      // Simulated RouterOS API latency & connection health check
       return c.json({
         success: true,
         latency_ms: Math.floor(12 + Math.random() * 25),
@@ -405,7 +443,6 @@ export class App extends DurableObject {
       const router = this.ctx.storage.sql.exec(`SELECT * FROM routers WHERE id=?`, id).toArray()[0];
       if (!router) return c.json({ error: "Router not found" }, 404);
 
-      // Realtime interfaces with simulated traffic
       const interfaces = [
         { name: "ether1-WAN", type: "ether", mac: "D4:01:C3:80:11:01", running: true, disabled: false, mtu: 1500, rx_kbps: Math.floor(18000 + Math.random() * 5000), tx_kbps: Math.floor(42000 + Math.random() * 8000), comment: "Main Fiber ISP (100Mbps)" },
         { name: "ether2-LAN-Bridge", type: "ether", mac: "D4:01:C3:80:11:02", running: true, disabled: false, mtu: 1500, rx_kbps: Math.floor(35000 + Math.random() * 6000), tx_kbps: Math.floor(15000 + Math.random() * 4000), comment: "Local LAN Trunk" },
@@ -415,7 +452,6 @@ export class App extends DurableObject {
         { name: "wlan1-Hotspot-2.4G", type: "wlan", mac: "D4:01:C3:80:11:06", running: true, disabled: false, mtu: 1500, rx_kbps: Math.floor(6000 + Math.random() * 1500), tx_kbps: Math.floor(11000 + Math.random() * 2000), comment: "Internal Wireless" }
       ];
 
-      // Firewall Filter Rules
       const firewallFilters = [
         { id: "*1", chain: "input", action: "accept", connection_state: "established,related", comment: "defconf: accept established,related", bytes: 14829102, packets: 92810, disabled: false },
         { id: "*2", chain: "input", action: "drop", connection_state: "invalid", comment: "defconf: drop invalid", bytes: 84120, packets: 1240, disabled: false },
@@ -424,20 +460,17 @@ export class App extends DurableObject {
         { id: "*5", chain: "forward", action: "drop", in_interface: "ether1-WAN", connection_state: "new", comment: "defconf: drop WAN in new connections", bytes: 298104, packets: 4890, disabled: false }
       ];
 
-      // NAT Rules
       const firewallNat = [
         { id: "*10", chain: "srcnat", action: "masquerade", out_interface: "ether1-WAN", comment: "defconf: masquerade WAN traffic", bytes: 98124019, packets: 812040, disabled: false },
         { id: "*11", chain: "dstnat", action: "redirect", protocol: "tcp", dst_port: "80", in_interface: "ether3-Hotspot-AP1", comment: "Hotspot HTTP Captive Portal Redirect", bytes: 481023, packets: 9820, disabled: false }
       ];
 
-      // Simple Queues
       const queues = [
         { name: "hs-user-NET-9012", target: "192.168.88.210/32", max_limit: "10M/3M", burst_limit: "15M/5M", bytes: "485M/1.85G", packets: "341k/982k", disabled: false },
         { name: "hs-user-VIP-ALEX", target: "192.168.88.188/32", max_limit: "25M/10M", burst_limit: "35M/15M", bytes: "1.2G/8.4G", packets: "890k/2.4M", disabled: false },
         { name: "Total-Hotspot-Bandwidth-Cap", target: "192.168.88.0/24", max_limit: "80M/30M", burst_limit: "100M/40M", bytes: "14.2G/88.1G", packets: "9.8M/31.2M", disabled: false }
       ];
 
-      // DHCP Leases
       const dhcpLeases = [
         { address: "192.168.88.210", mac: "04:D4:C4:8A:12:90", host_name: "Galaxy-S22-Ultra", status: "bound", expires_after: "11m 42s", comment: "Voucher NET-9012" },
         { address: "192.168.88.188", mac: "38:F9:D3:91:02:AA", host_name: "MacBook-Pro-Alex", status: "bound", expires_after: "2d 14h", comment: "Voucher VIP-ALEX" },
@@ -647,7 +680,6 @@ export class App extends DurableObject {
         }
       });
 
-      // Log activity
       this.ctx.storage.sql.exec(`
         INSERT INTO logs (router_id, category, level, message, timestamp)
         VALUES (?, 'hotspot', 'info', ?, ?)
@@ -713,14 +745,12 @@ export class App extends DurableObject {
       const mockMac = "04:" + Array.from({length: 5}, () => Math.floor(Math.random()*256).toString(16).padStart(2,'0').toUpperCase()).join(':');
       const mockIp = "192.168.88." + (100 + Math.floor(Math.random() * 150));
 
-      // Update voucher status to used
       this.ctx.storage.sql.exec(`
         UPDATE vouchers
         SET status='used', used_by_mac=?, used_by_ip=?, first_login_at=?, expires_at=?
         WHERE id=?
       `, mockMac, mockIp, now, now + 86400000, body.voucher_id);
 
-      // Log sale transaction
       this.ctx.storage.sql.exec(`
         INSERT INTO sales (router_id, voucher_id, code, profile_name, price, seller, payment_method, sold_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -745,9 +775,342 @@ export class App extends DurableObject {
       return c.json({ success: true });
     });
 
-    // 7. Active Sessions API
+    // 7. Member Accounts API
+    this.app.get("/api/accounts", (c) => {
+      const rows = this.ctx.storage.sql.exec(`
+        SELECT a.*, p.name as profile_name, p.rate_limit as profile_rate_limit, p.price as profile_price
+        FROM accounts a
+        LEFT JOIN profiles p ON a.profile_id = p.id
+        ORDER BY a.id DESC
+      `).toArray();
+      return c.json(rows);
+    });
+
+    this.app.post("/api/accounts", async (c) => {
+      const body = await c.req.json<{
+        username: string;
+        password: string;
+        full_name: string;
+        email_phone?: string;
+        profile_id?: number;
+        balance?: number;
+        used_by_mac?: string;
+      }>();
+
+      const username = (body.username || '').trim().toLowerCase();
+      if (!username || !body.password || !body.full_name) {
+        return c.json({ error: "Username, password and full name are required" }, 400);
+      }
+
+      const existing = this.ctx.storage.sql.exec(`SELECT id FROM accounts WHERE username=?`, username).toArray();
+      if (existing.length > 0) {
+        return c.json({ error: "Username already registered" }, 400);
+      }
+
+      const now = Date.now();
+      const expiresAt = now + (86400000 * 30); // Default 30 days
+
+      this.ctx.storage.sql.exec(`
+        INSERT INTO accounts (username, password, full_name, email_phone, profile_id, balance, used_by_mac, status, data_used_mb, uptime_used, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, ?, ?)
+      `, username, body.password, body.full_name, body.email_phone || '', body.profile_id || 2, body.balance || 0.00, body.used_by_mac || '', expiresAt, now);
+
+      const createdAccount = this.ctx.storage.sql.exec(`
+        SELECT a.*, p.name as profile_name, p.rate_limit as profile_rate_limit
+        FROM accounts a
+        LEFT JOIN profiles p ON a.profile_id = p.id
+        WHERE a.username=?
+      `, username).toArray()[0];
+
+      return c.json({ success: true, account: createdAccount });
+    });
+
+    this.app.put("/api/accounts/:id", async (c) => {
+      const id = c.req.param("id");
+      const body = await c.req.json<{
+        full_name?: string;
+        email_phone?: string;
+        password?: string;
+        profile_id?: number;
+        balance?: number;
+        status?: string;
+        used_by_mac?: string;
+      }>();
+
+      const account = this.ctx.storage.sql.exec(`SELECT * FROM accounts WHERE id=?`, id).toArray()[0];
+      if (!account) return c.json({ error: "Account not found" }, 404);
+
+      this.ctx.storage.sql.exec(`
+        UPDATE accounts
+        SET full_name=?, email_phone=?, password=?, profile_id=?, balance=?, status=?, used_by_mac=?
+        WHERE id=?
+      `,
+        body.full_name ?? account.full_name,
+        body.email_phone ?? account.email_phone,
+        body.password ?? account.password,
+        body.profile_id ?? account.profile_id,
+        body.balance ?? account.balance,
+        body.status ?? account.status,
+        body.used_by_mac ?? account.used_by_mac,
+        id
+      );
+
+      return c.json({ success: true });
+    });
+
+    this.app.delete("/api/accounts/:id", (c) => {
+      const id = c.req.param("id");
+      this.ctx.storage.sql.exec(`DELETE FROM accounts WHERE id=?`, id);
+      return c.json({ success: true });
+    });
+
+    // Account Top-up via Voucher
+    this.app.post("/api/accounts/topup", async (c) => {
+      const body = await c.req.json<{
+        account_id?: number;
+        username?: string;
+        voucher_code: string;
+      }>();
+
+      const code = (body.voucher_code || '').trim().toUpperCase();
+      if (!code) return c.json({ error: "Voucher code is required" }, 400);
+
+      // Find account
+      let account;
+      if (body.account_id) {
+        account = this.ctx.storage.sql.exec(`SELECT * FROM accounts WHERE id=?`, body.account_id).toArray()[0];
+      } else if (body.username) {
+        account = this.ctx.storage.sql.exec(`SELECT * FROM accounts WHERE username=?`, body.username.trim().toLowerCase()).toArray()[0];
+      }
+
+      if (!account) return c.json({ error: "Member account not found" }, 404);
+
+      // Find voucher
+      const voucher = this.ctx.storage.sql.exec(`
+        SELECT v.*, p.name as profile_name, p.price as profile_price
+        FROM vouchers v
+        LEFT JOIN profiles p ON v.profile_id = p.id
+        WHERE v.code=?
+      `, code).toArray()[0];
+
+      if (!voucher) return c.json({ error: "Invalid voucher code" }, 404);
+
+      if (voucher.status !== 'active') {
+        return c.json({ error: `Voucher is already ${voucher.status}` }, 400);
+      }
+
+      const now = Date.now();
+      const topupValue = (voucher.price as number) || 2.00;
+      const currentExpires = Math.max((account.expires_at as number) || 0, now);
+      const newExpires = currentExpires + (86400000 * 30); // Add 30 days extension
+
+      // Mark voucher used
+      this.ctx.storage.sql.exec(`
+        UPDATE vouchers SET status='used', comment=?, used_by_ip='account_topup', first_login_at=? WHERE id=?
+      `, `Refilled account: ${account.username}`, now, voucher.id);
+
+      // Credit account
+      const newBalance = ((account.balance as number) || 0) + topupValue;
+      this.ctx.storage.sql.exec(`
+        UPDATE accounts SET balance=?, expires_at=?, status='active' WHERE id=?
+      `, newBalance, newExpires, account.id);
+
+      // Record Sale
+      this.ctx.storage.sql.exec(`
+        INSERT INTO sales (router_id, voucher_id, code, profile_name, price, seller, payment_method, sold_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'Voucher TopUp', ?)
+      `, voucher.router_id as number, voucher.id as number, code, `Account Top-up (${account.username})`, topupValue, 'Self Portal Topup', now);
+
+      return c.json({
+        success: true,
+        message: `Account refilled by ${topupValue}! New Balance: ${newBalance}`,
+        new_balance: newBalance,
+        new_expires_at: newExpires
+      });
+    });
+
+    // 8. Captive Portal Authentication & Status API
+    this.app.post("/api/portal/login", async (c) => {
+      const body = await c.req.json<{
+        mode: 'voucher' | 'account' | 'guest';
+        code?: string;
+        username?: string;
+        password?: string;
+        mac?: string;
+        ip?: string;
+      }>();
+
+      const now = Date.now();
+      const clientMac = body.mac || "04:D4:C4:8A:" + Math.floor(10 + Math.random()*89) + ":" + Math.floor(10 + Math.random()*89);
+      const clientIp = body.ip || "192.168.88." + Math.floor(100 + Math.random()*150);
+
+      if (body.mode === 'voucher') {
+        const code = (body.code || '').trim().toUpperCase();
+        if (!code) return c.json({ success: false, message: "Please enter a voucher code" }, 400);
+
+        const voucher = this.ctx.storage.sql.exec(`
+          SELECT v.*, p.name as profile_name, p.rate_limit as profile_rate, p.validity_value, p.validity_unit
+          FROM vouchers v
+          LEFT JOIN profiles p ON v.profile_id = p.id
+          WHERE v.code=?
+        `, code).toArray()[0];
+
+        if (!voucher) {
+          return c.json({ success: false, message: "Invalid voucher code. Please check and try again." }, 400);
+        }
+
+        if (voucher.status === 'expired') {
+          return c.json({ success: false, message: "This voucher code has expired." }, 400);
+        }
+
+        if (voucher.status === 'disabled') {
+          return c.json({ success: false, message: "This voucher has been disabled by admin." }, 400);
+        }
+
+        // If active, activate it now
+        let expiresAt = voucher.expires_at as number;
+        if (voucher.status === 'active') {
+          expiresAt = now + (86400000 * 1); // 24h default
+          this.ctx.storage.sql.exec(`
+            UPDATE vouchers
+            SET status='used', used_by_mac=?, used_by_ip=?, first_login_at=?, expires_at=?
+            WHERE id=?
+          `, clientMac, clientIp, now, expiresAt, voucher.id);
+
+          // Log sale if not already recorded
+          this.ctx.storage.sql.exec(`
+            INSERT INTO sales (router_id, voucher_id, code, profile_name, price, seller, payment_method, sold_at)
+            VALUES (?, ?, ?, ?, ?, 'Captive Portal Login', 'Voucher', ?)
+          `, voucher.router_id as number, voucher.id as number, code, (voucher.profile_name || 'Voucher Pass') as string, (voucher.price || 0) as number, now);
+        }
+
+        return c.json({
+          success: true,
+          message: "Hotspot Access Granted!",
+          user_type: "voucher",
+          code: voucher.code,
+          profile_name: voucher.profile_name || 'Standard Pass',
+          rate_limit: voucher.profile_rate || '10M/3M',
+          ip: clientIp,
+          mac: clientMac,
+          uptime_left: "23h 59m 50s",
+          session_id: "hs-" + Math.floor(Math.random() * 899999 + 100000)
+        });
+      } else if (body.mode === 'account') {
+        const username = (body.username || '').trim().toLowerCase();
+        const pass = (body.password || '').trim();
+
+        if (!username || !pass) {
+          return c.json({ success: false, message: "Username and Password required" }, 400);
+        }
+
+        const account = this.ctx.storage.sql.exec(`
+          SELECT a.*, p.name as profile_name, p.rate_limit as profile_rate
+          FROM accounts a
+          LEFT JOIN profiles p ON a.profile_id = p.id
+          WHERE a.username=? AND a.password=?
+        `, username, pass).toArray()[0];
+
+        if (!account) {
+          return c.json({ success: false, message: "Invalid member username or password." }, 400);
+        }
+
+        if (account.status === 'suspended') {
+          return c.json({ success: false, message: "Your account is suspended. Please contact support." }, 400);
+        }
+
+        // Update MAC binding if blank
+        if (!account.used_by_mac) {
+          this.ctx.storage.sql.exec(`UPDATE accounts SET used_by_mac=? WHERE id=?`, clientMac, account.id);
+        }
+
+        return c.json({
+          success: true,
+          message: `Welcome back, ${account.full_name}!`,
+          user_type: "account",
+          username: account.username,
+          full_name: account.full_name,
+          balance: account.balance,
+          profile_name: account.profile_name || 'Member Pass',
+          rate_limit: account.profile_rate || '15M/5M',
+          ip: clientIp,
+          mac: clientMac,
+          expires_at: account.expires_at,
+          session_id: "acc-" + Math.floor(Math.random() * 899999 + 100000)
+        });
+      } else if (body.mode === 'guest') {
+        return c.json({
+          success: true,
+          message: "Free 15-Minute Trial Activated!",
+          user_type: "guest",
+          code: "GUEST-TRIAL",
+          profile_name: "Free Trial (2Mbps)",
+          rate_limit: "2M/1M",
+          ip: clientIp,
+          mac: clientMac,
+          uptime_left: "00h 15m 00s",
+          session_id: "trial-" + Math.floor(Math.random() * 899999 + 100000)
+        });
+      }
+
+      return c.json({ success: false, message: "Invalid login mode" }, 400);
+    });
+
+    // Portal Status Lookup
+    this.app.get("/api/portal/status", (c) => {
+      const code = (c.req.query("code") || '').trim().toUpperCase();
+      if (!code) return c.json({ error: "Code parameter required" }, 400);
+
+      const voucher = this.ctx.storage.sql.exec(`
+        SELECT v.*, p.name as profile_name, p.rate_limit as profile_rate
+        FROM vouchers v
+        LEFT JOIN profiles p ON v.profile_id = p.id
+        WHERE v.code=?
+      `, code).toArray()[0];
+
+      if (voucher) {
+        return c.json({
+          found: true,
+          type: "voucher",
+          code: voucher.code,
+          status: voucher.status,
+          price: voucher.price,
+          profile_name: voucher.profile_name,
+          rate_limit: voucher.profile_rate,
+          mac: voucher.used_by_mac,
+          created_at: voucher.created_at,
+          expires_at: voucher.expires_at
+        });
+      }
+
+      const account = this.ctx.storage.sql.exec(`
+        SELECT a.*, p.name as profile_name, p.rate_limit as profile_rate
+        FROM accounts a
+        LEFT JOIN profiles p ON a.profile_id = p.id
+        WHERE a.username=?
+      `, code.toLowerCase()).toArray()[0];
+
+      if (account) {
+        return c.json({
+          found: true,
+          type: "account",
+          username: account.username,
+          full_name: account.full_name,
+          status: account.status,
+          balance: account.balance,
+          profile_name: account.profile_name,
+          rate_limit: account.profile_rate,
+          mac: account.used_by_mac,
+          created_at: account.created_at,
+          expires_at: account.expires_at
+        });
+      }
+
+      return c.json({ found: false, message: "No active voucher or account found for code" }, 404);
+    });
+
+    // 9. Active Sessions API
     this.app.get("/api/sessions", (c) => {
-      // Combines DB used vouchers with simulated active sessions
       const usedVouchers = this.ctx.storage.sql.exec(`
         SELECT v.*, p.name as profile_name, p.rate_limit as profile_rate_limit
         FROM vouchers v
@@ -825,11 +1188,10 @@ export class App extends DurableObject {
       return c.json({ success: true, message: `Session ${sessionId} disconnected from hotspot` });
     });
 
-    // 8. Sales Analytics API
+    // 10. Sales Analytics API
     this.app.get("/api/sales", (c) => {
       const sales = this.ctx.storage.sql.exec(`SELECT * FROM sales ORDER BY sold_at DESC LIMIT 200`).toArray();
       
-      // Calculate daily stats for charts (last 7 days)
       const now = Date.now();
       const dailyStats: Array<{ date: string; revenue: number; count: number }> = [];
 
@@ -856,7 +1218,7 @@ export class App extends DurableObject {
       });
     });
 
-    // 9. Logs API
+    // 11. Logs API
     this.app.get("/api/logs", (c) => {
       const category = c.req.query("category");
       let query = `SELECT * FROM logs WHERE 1=1`;
@@ -873,7 +1235,7 @@ export class App extends DurableObject {
       return c.json(rows);
     });
 
-    // 10. RouterOS Script Generator API
+    // 12. RouterOS Script Generator API
     this.app.post("/api/script/generate", async (c) => {
       const body = await c.req.json<{
         hotspot_name: string;
@@ -939,7 +1301,7 @@ add name="admin-hs" password="admin-password" profile="VIP-Monthly" comment="Adm
       return c.json({ script: rscScript });
     });
 
-    // 11. Interactive RouterOS CLI Terminal Interpreter
+    // 13. Interactive RouterOS CLI Terminal Interpreter
     this.app.post("/api/terminal/exec", async (c) => {
       const body = await c.req.json<{ command: string }>();
       const cmd = (body.command || '').trim();
@@ -1009,7 +1371,7 @@ Flags: R - radius, B - blocked
     1 ${target}                                   56  118 12ms
     2 ${target}                                   56  118 15ms
     3 ${target}                                   56  118 13ms
-    sent=4 received=4 packet-loss=0% min-rtt=12ms avg-rtt=13ms max-rtt=15ms`;
+  sent=4 received=4 packet-loss=0% min-rtt=12ms avg-rtt=13ms max-rtt=15ms`;
       } else {
         output = `[admin@Core-Gateway] > ${cmd}
 Command output executed successfully.`;
