@@ -23,13 +23,20 @@ export class App extends DurableObject {
     const existingCurrency = this.ctx.storage.sql.exec(`SELECT value FROM settings WHERE key='currency'`).toArray();
     if (existingCurrency.length === 0) {
       this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('currency', 'USD ($)')`);
-      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('business_name', 'NetZone Hotspot & ISP')`);
-      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('hotspot_title', 'Connect to High-Speed Internet')`);
+      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('business_name', 'AKR-IT NETWORK')`);
+      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('hotspot_title', 'AKR-IT NETWORK High-Speed Internet')`);
       this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('contact_number', '+1 (555) 019-2831')`);
-      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('receipt_header', 'Welcome to NetZone Hotspot! Enjoy fast & reliable internet.')`);
-      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('receipt_footer', 'Support: call +1 555-019-2831. Non-refundable voucher.')`);
-      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('dns_name', 'wifi.netzone.hotspot')`);
+      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('receipt_header', 'Welcome to AKR-IT NETWORK Hotspot! Enjoy fast & reliable internet.')`);
+      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('receipt_footer', 'AKR-IT NETWORK Support: call +1 555-019-2831. Non-refundable voucher.')`);
+      this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('dns_name', 'wifi.akr-it.net')`);
       this.ctx.storage.sql.exec(`INSERT INTO settings (key, value) VALUES ('free_trial_enabled', '1')`);
+    } else {
+      // Ensure business_name and default settings reflect AKR-IT NETWORK
+      this.ctx.storage.sql.exec(`UPDATE settings SET value='AKR-IT NETWORK' WHERE key='business_name' AND (value LIKE '%NetZone%' OR value IS NULL)`);
+      this.ctx.storage.sql.exec(`UPDATE settings SET value='AKR-IT NETWORK High-Speed Internet' WHERE key='hotspot_title' AND (value LIKE '%NetZone%' OR value LIKE '%Connect%' OR value IS NULL)`);
+      this.ctx.storage.sql.exec(`UPDATE settings SET value='Welcome to AKR-IT NETWORK Hotspot! Enjoy fast & reliable internet.' WHERE key='receipt_header' AND (value LIKE '%NetZone%' OR value IS NULL)`);
+      this.ctx.storage.sql.exec(`UPDATE settings SET value='AKR-IT NETWORK Support: call +1 555-019-2831. Non-refundable voucher.' WHERE key='receipt_footer' AND (value LIKE '%NetZone%' OR value IS NULL)`);
+      this.ctx.storage.sql.exec(`UPDATE settings SET value='wifi.akr-it.net' WHERE key='dns_name' AND (value LIKE '%netzone%' OR value IS NULL)`);
     }
 
     // 2. Routers Table
@@ -55,12 +62,12 @@ export class App extends DurableObject {
     if (routersCount === 0) {
       this.ctx.storage.sql.exec(`
         INSERT INTO routers (name, host, port, rest_port, username, password, is_active, ros_version, model, location, status, created_at)
-        VALUES ('Core Gateway - RB750Gr3', '192.168.88.1', 8728, 443, 'admin', 'p@ss123', 1, '7.15.1', 'RB750Gr3 (hex)', 'Server Room Rack 1', 'online', ?)
+        VALUES ('AKR-IT Core Gateway - RB750Gr3', '192.168.88.1', 8728, 443, 'admin', 'p@ss123', 1, '7.15.1', 'RB750Gr3 (hex)', 'Server Room Rack 1', 'online', ?)
       `, Date.now() - 86400000 * 30);
 
       this.ctx.storage.sql.exec(`
         INSERT INTO routers (name, host, port, rest_port, username, password, is_active, ros_version, model, location, status, created_at)
-        VALUES ('Beachside Hotspot - hAP ac3', '192.168.89.1', 8728, 443, 'admin', 'p@ss123', 1, '7.14.2', 'RBD53iG-5HacD2HnD', 'Beach Cafe Tower', 'online', ?)
+        VALUES ('AKR-IT Beachside Hotspot - hAP ac3', '192.168.89.1', 8728, 443, 'admin', 'p@ss123', 1, '7.14.2', 'RBD53iG-5HacD2HnD', 'Beach Cafe Tower', 'online', ?)
       `, Date.now() - 86400000 * 15);
     }
 
@@ -70,8 +77,8 @@ export class App extends DurableObject {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         router_id INTEGER NOT NULL,
         name TEXT NOT NULL,
-        dns_name TEXT DEFAULT 'netzone.wifi',
-        ip_pool TEXT DEFAULT 'hs-pool-1',
+        dns_name TEXT DEFAULT 'wifi.akr-it.net',
+        ip_pool TEXT DEFAULT 'akr-pool-1',
         rate_limit TEXT NOT NULL, -- e.g. 5M/2M
         shared_users INTEGER NOT NULL DEFAULT 1,
         validity_value INTEGER NOT NULL DEFAULT 1,
@@ -85,27 +92,30 @@ export class App extends DurableObject {
       )
     `);
 
+    // Ensure profiles dns_name updated
+    this.ctx.storage.sql.exec(`UPDATE profiles SET dns_name='wifi.akr-it.net' WHERE dns_name LIKE '%netzone%'`);
+
     const profilesCount = this.ctx.storage.sql.exec(`SELECT COUNT(*) as c FROM profiles`).one().c as number;
     if (profilesCount === 0) {
       const now = Date.now();
       this.ctx.storage.sql.exec(`
         INSERT INTO profiles (router_id, name, dns_name, ip_pool, rate_limit, shared_users, validity_value, validity_unit, time_limit_value, time_limit_unit, data_limit_mb, price, lock_mac, created_at)
-        VALUES (1, '1 Hour Fast Pass', 'netzone.wifi', 'hs-pool-1', '5M/2M', 1, 1, 'hours', 1, 'hours', 0, 0.50, 1, ?)
+        VALUES (1, '1 Hour Fast Pass', 'wifi.akr-it.net', 'akr-pool-1', '5M/2M', 1, 1, 'hours', 1, 'hours', 0, 0.50, 1, ?)
       `, now);
 
       this.ctx.storage.sql.exec(`
         INSERT INTO profiles (router_id, name, dns_name, ip_pool, rate_limit, shared_users, validity_value, validity_unit, time_limit_value, time_limit_unit, data_limit_mb, price, lock_mac, created_at)
-        VALUES (1, '24 Hours Unlimited Day Pass', 'netzone.wifi', 'hs-pool-1', '10M/3M', 1, 1, 'days', 24, 'hours', 0, 2.00, 1, ?)
+        VALUES (1, '24 Hours Unlimited Day Pass', 'wifi.akr-it.net', 'akr-pool-1', '10M/3M', 1, 1, 'days', 24, 'hours', 0, 2.00, 1, ?)
       `, now);
 
       this.ctx.storage.sql.exec(`
         INSERT INTO profiles (router_id, name, dns_name, ip_pool, rate_limit, shared_users, validity_value, validity_unit, time_limit_value, time_limit_unit, data_limit_mb, price, lock_mac, created_at)
-        VALUES (1, '7 Days Weekly Special (10GB)', 'netzone.wifi', 'hs-pool-1', '15M/5M', 2, 7, 'days', 0, 'hours', 10240, 7.50, 1, ?)
+        VALUES (1, '7 Days Weekly Special (10GB)', 'wifi.akr-it.net', 'akr-pool-1', '15M/5M', 2, 7, 'days', 0, 'hours', 10240, 7.50, 1, ?)
       `, now);
 
       this.ctx.storage.sql.exec(`
         INSERT INTO profiles (router_id, name, dns_name, ip_pool, rate_limit, shared_users, validity_value, validity_unit, time_limit_value, time_limit_unit, data_limit_mb, price, lock_mac, created_at)
-        VALUES (1, '30 Days VIP Premium Pass', 'netzone.wifi', 'hs-pool-1', '25M/10M', 3, 30, 'days', 0, 'hours', 0, 25.00, 0, ?)
+        VALUES (1, '30 Days VIP Premium Pass', 'wifi.akr-it.net', 'akr-pool-1', '25M/10M', 3, 30, 'days', 0, 'hours', 0, 25.00, 0, ?)
       `, now);
     }
 
@@ -1238,64 +1248,157 @@ export class App extends DurableObject {
     // 12. RouterOS Script Generator API
     this.app.post("/api/script/generate", async (c) => {
       const body = await c.req.json<{
-        hotspot_name: string;
-        dns_name: string;
-        ip_address: string;
-        netmask: string;
-        ip_pool_start: string;
-        ip_pool_end: string;
-        rate_limit: string;
+        hotspot_name?: string;
+        dns_name?: string;
+        ip_address?: string;
+        netmask?: string;
+        ip_pool_start?: string;
+        ip_pool_end?: string;
+        wan_interface?: string;
+        lan_interface?: string;
+        company_name?: string;
       }>();
 
-      const hsName = body.hotspot_name || "NetZone-Hotspot";
-      const dnsName = body.dns_name || "netzone.wifi";
-      const ipAddr = body.ip_address || "192.168.88.1";
-      const poolStart = body.ip_pool_start || "192.168.88.10";
-      const poolEnd = body.ip_pool_end || "192.168.88.254";
+      const company = body.company_name || "AKR-IT NETWORK";
+      const companyClean = company.replace(/[^a-zA-Z0-9]/g, "-").toUpperCase();
+      const hsName = body.hotspot_name || `${companyClean}-Hotspot`;
+      const dnsName = body.dns_name || "wifi.akr-it.net";
+      const ipAddr = body.ip_address || "10.5.50.1";
+      const poolStart = body.ip_pool_start || "10.5.50.10";
+      const poolEnd = body.ip_pool_end || "10.5.50.254";
+      const wanIf = body.wan_interface || "ether1-WAN";
+      const lanIf = body.lan_interface || "ether2-LAN";
 
-      const rscScript = `# =========================================================
-# MikroTik RouterOS Hotspot Auto-Configuration Script
-# Generated by NetZone MikroTik Server Manager
-# RouterOS Version: 7.x
-# Date: ${new Date().toISOString().split('T')[0]}
-# =========================================================
+      const rscScript = `# ====================================================================
+# ${company} - MikroTik RouterOS v7 Complete Hotspot Setup Script
+# Router Identity: ${companyClean}-GW
+# Hotspot Portal DNS: ${dnsName}
+# Gateway Subnet: ${ipAddr}/24
+# RouterOS Compatible Version: 7.x (7.10+)
+# Generated Date: ${new Date().toISOString().split('T')[0]}
+# ====================================================================
 
-/log info message="Starting Hotspot Setup Script..."
+/log info message="================================================="
+/log info message="Initializing ${company} Hotspot Setup Script"
+/log info message="================================================="
 
-# 1. Create IP Pool
-/ip pool add name=hs-pool-1 ranges=${poolStart}-${poolEnd}
+# --------------------------------------------------------------------
+# 1. SYSTEM IDENTITY & CLOCK / NTP SETUP
+# --------------------------------------------------------------------
+/system identity set name="${companyClean}-GW"
+/system clock set time-zone-name="UTC"
+/system ntp client set enabled=yes
+/system ntp client servers add address="pool.ntp.org"
+/log info message="[1/11] System identity set to ${companyClean}-GW & NTP enabled"
 
-# 2. Add IP Address to Hotspot Interface
-/ip address add address=${ipAddr}/24 interface=bridge-hotspot comment="Hotspot Gateway"
+# --------------------------------------------------------------------
+# 2. BRIDGE & INTERFACE CONFIGURATION
+# --------------------------------------------------------------------
+/interface bridge add name=bridge-akr-hotspot comment="${company} Hotspot Main Bridge" auto-mac=yes
 
-# 3. Create Hotspot User Profile
-/ip hotspot user profile
-add name="default" idle-timeout=none keepalive-timeout=2m status-autorefresh=1m
-add name="1-Hour-Pass" rate-limit="5M/2M" shared-users=1 status-autorefresh=1m
-add name="24-Hour-Pass" rate-limit="10M/3M" shared-users=1 status-autorefresh=1m
-add name="VIP-Monthly" rate-limit="25M/10M" shared-users=3 status-autorefresh=1m
+# Assign Ports to Bridge
+/interface bridge port add bridge=bridge-akr-hotspot interface=${lanIf} comment="Local Hotspot Access Point Port 1"
+/interface bridge port add bridge=bridge-akr-hotspot interface=ether3 comment="Local Hotspot Access Point Port 2" disabled=no
+/interface bridge port add bridge=bridge-akr-hotspot interface=ether4 comment="Local Hotspot Access Point Port 3" disabled=no
+/log info message="[2/11] Hotspot Bridge bridge-akr-hotspot created"
 
-# 4. Create Hotspot Server Profile
+# --------------------------------------------------------------------
+# 3. IP ADDRESSING & POOL SETUP
+# --------------------------------------------------------------------
+/ip pool add name=akr-hotspot-pool ranges=${poolStart}-${poolEnd}
+/ip address add address=${ipAddr}/24 interface=bridge-akr-hotspot comment="${company} Hotspot Gateway"
+/log info message="[3/11] Gateway IP ${ipAddr}/24 assigned to bridge-akr-hotspot"
+
+# --------------------------------------------------------------------
+# 4. DHCP SERVER SETUP
+# --------------------------------------------------------------------
+/ip dhcp-server add name=dhcp-akr-hotspot interface=bridge-akr-hotspot address-pool=akr-hotspot-pool disabled=no lease-time=1h
+/ip dhcp-server network add address=10.5.50.0/24 gateway=${ipAddr} dns-server=${ipAddr},8.8.8.8,1.1.1.1 comment="${company} Hotspot Network"
+/log info message="[4/11] DHCP Server dhcp-akr-hotspot active on range ${poolStart}-${poolEnd}"
+
+# --------------------------------------------------------------------
+# 5. DNS SERVER & STATIC PORTAL RECORD
+# --------------------------------------------------------------------
+/ip dns set allow-remote-requests=yes servers=8.8.8.8,1.1.1.1
+/ip dns static add name="${dnsName}" address=${ipAddr} comment="${company} Portal DNS Redirect"
+/log info message="[5/11] DNS Static entry added: ${dnsName} -> ${ipAddr}"
+
+# --------------------------------------------------------------------
+# 6. HOTSPOT SERVER PROFILE & HOTSPOT SERVER
+# --------------------------------------------------------------------
 /ip hotspot profile
-add dns-name="${dnsName}" hotspot-area="" html-directory=hotspot \\
-    http-cookie-lifetime=1d login-by=http-chap,http-pap,cookie name=hsprof-1 \\
+add dns-name="${dnsName}" hotspot-area="${company} Zone" html-directory=hotspot \\
+    http-cookie-lifetime=1d login-by=http-chap,http-pap,cookie name=hsprof-akr \\
     rate-limit="" use-radius=no
 
-# 5. Create Hotspot Server
 /ip hotspot
-add address-pool=hs-pool-1 disabled=no interface=bridge-hotspot \\
-    name="${hsName}" profile=hsprof-1 idle-timeout=5m
+add address-pool=akr-hotspot-pool disabled=no interface=bridge-akr-hotspot \\
+    name="${hsName}" profile=hsprof-akr idle-timeout=15m
+/log info message="[6/11] Hotspot Server ${hsName} running on bridge-akr-hotspot"
 
-# 6. Walled Garden Rules (Bypass payment / portal assets)
+# --------------------------------------------------------------------
+# 7. TARIFF BANDWIDTH USER PROFILES
+# --------------------------------------------------------------------
+/ip hotspot user profile
+set [ find default=yes ] idle-timeout=10m keepalive-timeout=2m status-autorefresh=1m
+add name="1-Hour-Pass" rate-limit="5M/2M" shared-users=1 status-autorefresh=1m transparent-proxy=no
+add name="24-Hour-Pass" rate-limit="10M/3M" shared-users=1 status-autorefresh=1m transparent-proxy=no
+add name="7-Day-Weekly" rate-limit="15M/5M" shared-users=2 status-autorefresh=1m transparent-proxy=no
+add name="30-Day-VIP" rate-limit="25M/10M" shared-users=3 status-autorefresh=1m transparent-proxy=no
+add name="AKR-Member-Plan" rate-limit="50M/20M" shared-users=5 status-autorefresh=1m transparent-proxy=no
+/log info message="[7/11] Bandwidth Profiles created (1H, 24H, 7D, 30D VIP, Member)"
+
+# --------------------------------------------------------------------
+# 8. FIREWALL NAT & SECURITY FILTER RULES
+# --------------------------------------------------------------------
+/ip firewall nat
+add chain=srcnat out-interface=${wanIf} action=masquerade comment="${company} WAN Masquerade"
+
+/ip firewall filter
+add chain=input connection-state=established,related action=accept comment="Accept Established/Related Connections"
+add chain=input connection-state=invalid action=drop comment="Drop Invalid Input Packets"
+add chain=input protocol=icmp action=accept comment="Allow ICMP Ping"
+add chain=input in-interface=bridge-akr-hotspot dst-port=53 protocol=udp action=accept comment="Allow Hotspot DNS UDP"
+add chain=input in-interface=bridge-akr-hotspot dst-port=53 protocol=tcp action=accept comment="Allow Hotspot DNS TCP"
+add chain=forward action=accept connection-state=established,related comment="Accept Established/Related Forward"
+add chain=forward action=drop connection-state=invalid comment="Drop Invalid Forward Packets"
+/log info message="[8/11] Firewall NAT Masquerade & Filter rules enabled"
+
+# --------------------------------------------------------------------
+# 9. WALLED GARDEN RULES (CAPTIVE PORTAL BYPASS)
+# --------------------------------------------------------------------
 /ip hotspot walled-garden
-add comment="Allow payment gateways" dst-host="*.stripe.com"
-add comment="Allow portal assets" dst-host="*.cloudflare.com"
+add comment="Allow Android Captive Portal Check" dst-host="*.gstatic.com"
+add comment="Allow Google Connectivity Test" dst-host="*.google.com"
+add comment="Allow Apple Captive Detection" dst-host="*.apple.com"
+add comment="Allow Microsoft Captive Check" dst-host="*.msftconnecttest.com"
+add comment="Allow Cloudflare CDN" dst-host="*.cloudflare.com"
+add comment="Allow Stripe Payment Gateways" dst-host="*.stripe.com"
+add comment="Allow Mobile Money / M-Pesa API" dst-host="*.safaricom.co.ke"
+/log info message="[9/11] Walled Garden Bypass rules created for Captive Detection & Payments"
 
-# 7. Add Sample Hotspot Users
+# --------------------------------------------------------------------
+# 10. DEFAULT ADMIN & TEST USER ACCOUNTS
+# --------------------------------------------------------------------
 /ip hotspot user
-add name="admin-hs" password="admin-password" profile="VIP-Monthly" comment="Admin Superuser"
+add name="admin-akr" password="AKR-Admin-P@ss2026!" profile="30-Day-VIP" comment="${company} Administrator Account"
+add name="demo-user" password="1234" profile="1-Hour-Pass" comment="${company} Demo Voucher"
+/log info message="[10/11] Superuser 'admin-akr' created"
 
-/log info message="Hotspot Configuration Complete! DNS: ${dnsName}"
+# --------------------------------------------------------------------
+# 11. AUTOMATED SYSTEM DAILY BACKUP SCHEDULER
+# --------------------------------------------------------------------
+/system script
+add name="AKR_Daily_Backup" source="/system backup save name=(\"AKR-IT_Backup_\" . [:pick [/system clock get date] 7 11] . [:pick [/system clock get date] 0 3] . [:pick [/system clock get date] 4 6]); /log info message=\"${company} Daily Backup Executed Successfully\""
+
+/system scheduler
+add name="AKR_Backup_Schedule" interval=1d start-time=03:00:00 on-event="AKR_Daily_Backup" comment="Automated Daily ${company} System Backup"
+/log info message="[11/11] Daily Backup script and schedule configured"
+
+/log info message="================================================="
+/log info message="${company} HOTSPOT FULL SCRIPT SETUP COMPLETE!"
+/log info message="Captive Portal URL: http://${dnsName}"
+/log info message="================================================="
 `;
 
       return c.json({ script: rscScript });
@@ -1321,8 +1424,11 @@ add name="admin-hs" password="admin-password" profile="VIP-Monthly" comment="Adm
   /ip firewall filter print  - View firewall rules
   /system identity print    - Router system name
   ping <ip>                 - Test ping connectivity`;
+      } else if (lower.includes("system identity print")) {
+        output = `[admin@AKR-IT-NETWORK-GW] > /system identity print
+     name: AKR-IT-NETWORK-GW`;
       } else if (lower.includes("system resource print")) {
-        output = `[admin@Core-Gateway] > /system resource print
+        output = `[admin@AKR-IT-NETWORK-GW] > /system resource print
          uptime: 14d06h22m19s
         version: 7.15.1 (stable)
      build-time: May/28/2024 11:20:00
@@ -1341,7 +1447,7 @@ write-sect-since-reboot: 98124
          board-name: RB750Gr3
            platform: MikroTik`;
       } else if (lower.includes("interface print")) {
-        output = `[admin@Core-Gateway] > /interface print
+        output = `[admin@AKR-IT-NETWORK-GW] > /interface print
 Flags: D - dynamic, X - disabled, R - running, S - slave
  #     NAME                    TYPE       ACTUAL-MTU L2MTU  MAX-L2MTU MAC-ADDRESS
  0 R   ether1-WAN              ether            1500  1598       9214 D4:01:C3:80:11:01
@@ -1352,20 +1458,20 @@ Flags: D - dynamic, X - disabled, R - running, S - slave
  5 R   wlan1-Hotspot-2.4G      wlan             1500  1600       2290 D4:01:C3:80:11:06`;
       } else if (lower.includes("ip hotspot user print")) {
         const vouchers = this.ctx.storage.sql.exec(`SELECT code, password, status FROM vouchers LIMIT 10`).toArray();
-        output = `[admin@Core-Gateway] > /ip hotspot user print
+        output = `[admin@AKR-IT-NETWORK-GW] > /ip hotspot user print
 Flags: X - disabled, D - dynamic
  #   NAME                  PASSWORD             PROFILE        STATUS
 ` + vouchers.map((v, i) => ` ${i}   ${(v.code as string).padEnd(20)} ${(v.password as string).padEnd(20)} 24-Hour-Pass   ${v.status}`).join('\n');
       } else if (lower.includes("ip hotspot active print")) {
-        output = `[admin@Core-Gateway] > /ip hotspot active print
+        output = `[admin@AKR-IT-NETWORK-GW] > /ip hotspot active print
 Flags: R - radius, B - blocked
  #   USER        ADDRESS        MAC-ADDRESS       UPTIME      BYTES-IN   BYTES-OUT
- 0   NET-9012    192.168.88.210 04:D4:C4:8A:12:90 03h42m10s   485.2MB    1.85GB
- 1   VIP-ALEX    192.168.88.188 38:F9:D3:91:02:AA 1d14h05m    1.20GB     8.40GB
- 2   NET-3382    192.168.88.105 7C:10:C9:4F:B2:1A 00h15m32s   82.0MB     310.5MB`;
+ 0   NET-9012    10.5.50.210    04:D4:C4:8A:12:90 03h42m10s   485.2MB    1.85GB
+ 1   VIP-ALEX    10.5.50.188    38:F9:D3:91:02:AA 1d14h05m    1.20GB     8.40GB
+ 2   NET-3382    10.5.50.105    7C:10:C9:4F:B2:1A 00h15m32s   82.0MB     310.5MB`;
       } else if (lower.startsWith("ping")) {
         const target = cmd.split(" ")[1] || "8.8.8.8";
-        output = `[admin@Core-Gateway] > ping ${target}
+        output = `[admin@AKR-IT-NETWORK-GW] > ping ${target}
   SEQ HOST                                     SIZE TTL TIME  STATUS
     0 ${target}                                   56  118 14ms
     1 ${target}                                   56  118 12ms
@@ -1373,8 +1479,12 @@ Flags: R - radius, B - blocked
     3 ${target}                                   56  118 13ms
   sent=4 received=4 packet-loss=0% min-rtt=12ms avg-rtt=13ms max-rtt=15ms`;
       } else {
-        output = `[admin@Core-Gateway] > ${cmd}
-Command output executed successfully.`;
+        output = `[admin@AKR-IT-NETWORK-GW] > ${cmd}
+Command executed successfully on AKR-IT NETWORK gateway.`;
+      }
+
+      return c.json({ output });
+    });
       }
 
       return c.json({ output });
